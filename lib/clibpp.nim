@@ -240,10 +240,12 @@ macro wclass*(className, opts: expr, body: stmt): stmt {.immediate.} =
     let opts = parse_opts(className, oseq)
 
     # Declare a type named `className`, importing from C++
+    let isInheritable = parent.isNil and opts.inheritable
     var newType = parseExpr(
-        "type $1* {.header:$2, importcpp$3.} = object".format(
+        "type $1* {.header:$2, importcpp$3.} = object$4".format(
             $ opts.className, repr(opts.header),
-            (if opts.importc.isNil: "" else: ":"& repr(opts.importc))))
+            (if opts.importc.isNil: "" else: ":"& repr(opts.importc)),
+            if isInheritable: " {.inheritable.}" else: ""))
     newType[0][1] = genericParamsNode
 
     var recList = newNimNode(nnkRecList)
@@ -251,9 +253,6 @@ macro wclass*(className, opts: expr, body: stmt): stmt {.immediate.} =
     if not parent.isNil:
         # Type has a parent
         newType[0][2][1] = newNimNode(nnkOfInherit).add(parent)
-    elif opts.inheritable:
-        # Add inheritable pragma
-        newType[0][0][1].add(ident"inheritable")
     if opts.byCopy:
         newType[0][0][1].add(ident"bycopy")
     # Iterate through statements in class definition
@@ -313,13 +312,16 @@ macro wclass*(className, opts: expr, body: stmt): stmt {.immediate.} =
                   if cppName == nil:
                     cppName = if ty.toStrLit.strVal == "bool": $varNameIdent else: ($varNameIdent).capitalize
                   if varNameNode.kind != nnkPostfix:
-                    varNameNode = postfix(varNameNode, "*") # export all fields
+                    # export all fields
+                    if varNameNode.kind == nnkPragmaExpr:
+                      varNameNode[0] = postfix(varNameNode[0], "*")
+                    else:
+                      varNameNode = postfix(varNameNode, "*")
                   if cppName != $varNameIdent:
                     varNameNode = addVarPragma(varNameNode, makeStrPragma("importcpp", cppName))
                   recList.add newIdentDefs(varNameNode, ty)
                 for n,ty in items(statics):
                     result.add buildStaticAccessor(n, ty, opts.className, opts.ns)
-
         else:
             result.add statement
     if not opts.isNoDef:

@@ -1,5 +1,7 @@
 # Copyright 2016 Xored Software, Inc.
-import ropes, hashes
+import ropes, hashes, macros, strutils, sequtils
+
+import "../lib/macroutils"
 
 type
   MacroOptKind = enum
